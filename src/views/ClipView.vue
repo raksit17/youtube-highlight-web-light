@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ArrowLeft, Download, CheckCircle2, Save, Scissors, SkipBack, SkipForward, Play, RotateCcw } from 'lucide-vue-next'
+import { ArrowLeft, Download, CheckCircle2, Save, Scissors, SkipBack, SkipForward, Play, RotateCcw, Film, LoaderCircle, RefreshCw } from 'lucide-vue-next'
 import { useReviewStore } from '@/stores/review'
 import { highlightApi, isDemoMode } from '@/services/api'
-import type { ClipDraft, ClipPreset, RenderFormat, RenderMode, RenderResolution } from '@/types/domain'
+import type { ClipDraft, ClipPreset, RenderFormat, RenderJob, RenderMode, RenderResolution } from '@/types/domain'
 import { CLIP_PRESET_CONFIG, PRESET_ORDER } from '@/utils/presets'
 import { formatTime, parseTime } from '@/utils/time'
 import YouTubePlayer from '@/components/YouTubePlayer.vue'
@@ -29,6 +29,10 @@ const renderFormat = ref<RenderFormat>('MP4')
 const renderResolution = ref<RenderResolution>('1080P')
 const renderMode = ref<RenderMode>('ACCURATE')
 const includeSubtitles = ref(false)
+const renderJob = ref<RenderJob | null>(null)
+const renderError = ref('')
+const downloading = ref(false)
+let renderPollTimer: number | undefined
 const candidate = computed(() => store.candidates.find((m) => m.id === route.params.candidateId) ?? null)
 const sourcePreset = computed(() => draft.value?.sourcePreset ?? store.selectedPreset)
 const originalRange = computed(() => candidate.value?.clipPresets[sourcePreset.value])
@@ -48,6 +52,9 @@ const renderResolutionLabel = computed(() => ({
 }[renderResolution.value]))
 const renderModeLabel = computed(() => renderMode.value === 'ACCURATE' ? 'Accurate export' : 'Fast export')
 const renderOutputLabel = computed(() => `${renderFormat.value} · ${renderResolutionLabel.value} · ${renderModeLabel.value}`)
+const renderInProgress = computed(() => renderJob.value?.status === 'QUEUED' || renderJob.value?.status === 'RUNNING')
+const renderCompleted = computed(() => renderJob.value?.status === 'COMPLETED')
+const renderFailed = computed(() => renderJob.value?.status === 'FAILED')
 const renderRequestPreview = computed(() => ({
   clipId: draft.value?.id ?? null,
   format: renderFormat.value,
@@ -60,6 +67,108 @@ const renderRequestPreview = computed(() => ({
     ? exactEndMs.value - exactStartMs.value
     : null,
 }))
+
+function stopRenderPolling() {
+  if (renderPollTimer !== undefined) {
+    window.clearTimeout(renderPollTimer)
+    renderPollTimer = undefined
+  }
+}
+
+async function pollRenderJob(jobId: string) {
+  stopRenderPolling()
+
+  try {
+    const job = await highlightApi.getRenderJob(jobId)
+    renderJob.value = job
+
+    if (job.status === 'COMPLETED') {
+      success.value = 'Video render completed. Your file is ready to download.'
+      if (draft.value) draft.value = { ...draft.value, status: 'EXPORTED' }
+      return
+    }
+
+    if (job.status === 'FAILED') {
+      renderError.value = job.errorMessage || 'Render failed'
+      return
+    }
+
+    renderPollTimer = window.setTimeout(() => {
+      void pollRenderJob(jobId)
+    }, 1000)
+  } catch (e) {
+    renderError.value = e instanceof Error ? e.message : 'Could not read render progress'
+  }
+}
+
+async function renderVideo() {
+  if (!draft.value || !valid.value || renderInProgress.value) return
+
+  renderError.value = ''
+  success.value = ''
+
+  if (isDemoMode) {
+    renderError.value = 'Set VITE_DEMO_MODE=false to use the FFmpeg render backend.'
+    return
+  }
+
+  if (isDirty.value) {
+    const saved = await saveDraft()
+    if (!saved) return
+  }
+
+  try {
+    const job = await highlightApi.renderClip(draft.value.id, {
+      format: renderFormat.value,
+      resolution: renderResolution.value,
+      mode: renderMode.value,
+      includeSubtitles: includeSubtitles.value,
+    })
+
+    renderJob.value = job
+
+    if (job.status === 'COMPLETED') {
+      success.value = 'Video render completed. Your file is ready to download.'
+      return
+    }
+
+    if (job.status === 'FAILED') {
+      renderError.value = job.errorMessage || 'Render failed'
+      return
+    }
+
+    void pollRenderJob(job.id)
+  } catch (e) {
+    renderError.value = e instanceof Error ? e.message : 'Could not start video render'
+  }
+}
+
+async function downloadRenderedVideo() {
+  if (!draft.value || !renderCompleted.value || downloading.value) return
+
+  downloading.value = true
+  renderError.value = ''
+
+  try {
+    const blob = await highlightApi.downloadRenderedClip(draft.value.id)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    const extension = renderJob.value?.format === 'WEBM' ? 'webm' : 'mp4'
+
+    link.href = url
+    link.download = renderJob.value?.outputFilename || `highlight-${draft.value.id}.${extension}`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    URL.revokeObjectURL(url)
+
+    success.value = 'Rendered video download started.'
+  } catch (e) {
+    renderError.value = e instanceof Error ? e.message : 'Download failed'
+  } finally {
+    downloading.value = false
+  }
+}
 
 function applyDraft(value: ClipDraft) {
   draft.value = value
@@ -93,7 +202,18 @@ async function init() {
     error.value = e instanceof Error ? e.message : 'Could not load clip draft'
   } finally { loading.value = false }
 }
-watch(() => [route.params.id, route.params.candidateId, route.query.draftId], () => { void init() }, { immediate: true })
+watch(() => [route.params.id, route.params.candidateId, route.query.draftId], () => {
+  stopRenderPolling()
+  renderJob.value = null
+  renderError.value = ''
+  void init()
+}, { immediate: true })
+
+watch(renderMode, (mode) => {
+  if (mode === 'FAST') renderResolution.value = 'ORIGINAL'
+})
+
+onUnmounted(() => stopRenderPolling())
 function setStart() { startText.value = formatTime((player.value?.getCurrentTime() ?? 0) * 1000) }
 function setEnd() { endText.value = formatTime((player.value?.getCurrentTime() ?? 0) * 1000) }
 function preview() { if (startMs.value != null) player.value?.seekTo(startMs.value / 1000) }
@@ -180,11 +300,11 @@ async function createOtherPreset(preset: ClipPreset) {
         <div class="render-form">
           <div class="render-form-heading">
             <div>
-              <span class="render-kicker">VIDEO EXPORT — PROTOTYPE</span>
+              <span class="render-kicker">VIDEO EXPORT</span>
               <h3>Render options</h3>
-              <p>Configure the future FFmpeg render request. This form does not render or download video yet.</p>
+              <p>Create a real video file with the FFmpeg backend, then download it when the render completes.</p>
             </div>
-            <span class="render-coming-soon">API NOT CONNECTED</span>
+            <span class="render-connected">BACKEND CONNECTED</span>
           </div>
 
           <div class="render-grid">
@@ -197,8 +317,8 @@ async function createOtherPreset(preset: ClipPreset) {
 
             <label class="field-label">Resolution
               <select v-model="renderResolution" class="text-input">
-                <option value="1080P">1080p — Full HD</option>
-                <option value="720P">720p — HD</option>
+                <option value="1080P" :disabled="renderMode === 'FAST'">1080p — Full HD</option>
+                <option value="720P" :disabled="renderMode === 'FAST'">720p — HD</option>
                 <option value="ORIGINAL">Original — source resolution</option>
               </select>
             </label>
@@ -248,8 +368,72 @@ async function createOtherPreset(preset: ClipPreset) {
           </details>
 
           <div class="render-placeholder">
-            Future flow: <code>POST /api/v1/clips/:id/render</code> → Render Job → FFmpeg Worker → Download.
+            Flow: <code>POST /api/v1/clips/:id/render</code> → Render Job → FFmpeg Worker → Download.
           </div>
+
+          <button
+            v-if="!renderInProgress && !renderCompleted"
+            type="button"
+            class="button button-orange full-width render-start-button"
+            :disabled="!valid || saving"
+            @click="renderVideo"
+          >
+            <Film :size="17" />
+            {{ renderFailed ? 'Retry render video' : 'Render video' }}
+          </button>
+
+          <div v-if="renderJob" class="render-job-card" :class="renderJob.status.toLowerCase()">
+            <div class="render-job-header">
+              <div>
+                <span>RENDER JOB</span>
+                <strong>{{ renderJob.stage }}</strong>
+              </div>
+              <b>{{ renderJob.progress }}%</b>
+            </div>
+
+            <div class="render-progress-track">
+              <div :style="{ width: `${renderJob.progress}%` }"></div>
+            </div>
+
+            <div class="render-job-meta">
+              <span>{{ renderJob.status }}</span>
+              <span>{{ renderJob.format }}</span>
+              <span>{{ renderJob.resolution }}</span>
+              <span>{{ renderJob.mode }}</span>
+            </div>
+
+            <p v-if="renderInProgress" class="render-job-note">
+              <LoaderCircle :size="14" class="spin-icon" />
+              FFmpeg is rendering this clip. This page checks progress automatically.
+            </p>
+
+            <p v-if="renderFailed" class="render-job-error">
+              {{ renderJob.errorMessage || renderError || 'Render failed.' }}
+            </p>
+          </div>
+
+          <button
+            v-if="renderCompleted"
+            type="button"
+            class="button button-dark full-width render-download-button"
+            :disabled="downloading"
+            @click="downloadRenderedVideo"
+          >
+            <Download :size="17" />
+            {{ downloading ? 'Preparing download...' : `Download ${renderJob?.format ?? 'video'}` }}
+          </button>
+
+          <button
+            v-if="renderCompleted"
+            type="button"
+            class="button button-outline full-width"
+            @click="renderJob = null; renderError = ''"
+          >
+            <RefreshCw :size="15" />
+            Render another version
+          </button>
+
+          <p v-if="renderError && !renderFailed" class="render-job-error">{{ renderError }}</p>
         </div>
 
         <p v-if="success" class="save-success"><CheckCircle2 :size="16" /> {{ success }}</p><p v-if="error" class="error-text">{{ error }}</p>
