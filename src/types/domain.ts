@@ -3,6 +3,16 @@ export type RejectReason = 'SPAM' | 'NOT_INTERESTING' | 'REPEATED_EVENT' | 'BAD_
 export type MomentCategory = 'FUNNY' | 'SURPRISE' | 'REACTION' | 'CHAT_INTERACTION' | 'CONVERSATION' | string
 export type ClipPreset = 'QUICK' | 'CONTEXT' | 'STANDARD' | 'LONG'
 export type ClipDraftStatus = 'DRAFT' | 'READY' | 'EXPORTED'
+export type RenderFormat = 'MP4' | 'WEBM'
+export type RenderResolution = 'ORIGINAL' | '1080P' | '720P'
+export type RenderMode = 'ACCURATE' | 'FAST'
+
+export interface RenderOptions {
+  format: RenderFormat
+  resolution: RenderResolution
+  mode: RenderMode
+  includeSubtitles: boolean
+}
 
 export interface ClipPresetRange {
   label: string
