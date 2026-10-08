@@ -1,4 +1,4 @@
-import type { Candidate, CandidateContext, ClipDraft, CreateClipPayload, UpdateClipPayload, Heatmap, RejectReason, ReviewStatus, Video } from '@/types/domain'
+import type { Candidate, CandidateContext, ClipDraft, CreateClipPayload, UpdateClipPayload, Heatmap, RejectReason, ReviewStatus, RenderJob, RenderOptions, Video } from '@/types/domain'
 import { demoCandidates, demoContext, demoCreateClip, demoGetClip, demoExportClip, demoHeatmap, demoListClips, demoUpdateClip, demoUpdateReview, demoVideos } from './demo'
 
 export const isDemoMode = import.meta.env.VITE_DEMO_MODE !== 'false'
@@ -14,6 +14,15 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     throw new Error(`API ${response.status}: ${details || response.statusText}`)
   }
   return response.json() as Promise<T>
+}
+
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(`${base}${path}`)
+  if (!response.ok) {
+    const details = await response.text().catch(() => '')
+    throw new Error(`API ${response.status}: ${details || response.statusText}`)
+  }
+  return response.blob()
 }
 
 const enc = (id: string) => encodeURIComponent(id)
@@ -86,5 +95,20 @@ export const highlightApi = {
   async exportClip(id: string): Promise<unknown> {
     if (isDemoMode) return demoExportClip(id)
     return request<unknown>(`/clips/${enc(id)}/export`)
+  },
+  async renderClip(id: string, options: RenderOptions): Promise<RenderJob> {
+    if (isDemoMode) throw new Error('Video rendering is only available when VITE_DEMO_MODE=false')
+    return request<RenderJob>(`/clips/${enc(id)}/render`, {
+      method: 'POST',
+      body: JSON.stringify(options),
+    })
+  },
+  async getRenderJob(id: string): Promise<RenderJob> {
+    if (isDemoMode) throw new Error('Render jobs are only available when VITE_DEMO_MODE=false')
+    return request<RenderJob>(`/render-jobs/${enc(id)}`)
+  },
+  async downloadRenderedClip(id: string): Promise<Blob> {
+    if (isDemoMode) throw new Error('Rendered downloads are only available when VITE_DEMO_MODE=false')
+    return requestBlob(`/clips/${enc(id)}/download`)
   },
 }
