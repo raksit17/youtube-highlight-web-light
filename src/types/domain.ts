@@ -14,6 +14,27 @@ export interface RenderOptions {
   includeSubtitles: boolean
 }
 
+export type RenderJobStatus = 'QUEUED' | 'RUNNING' | 'COMPLETED' | 'FAILED'
+
+export interface RenderJob {
+  id: string
+  clipId: string
+  status: RenderJobStatus
+  progress: number
+  stage: string
+  format: RenderFormat
+  resolution: RenderResolution
+  mode: RenderMode
+  includeSubtitles: boolean
+  outputFilename: string | null
+  downloadUrl: string | null
+  errorMessage: string | null
+  startedAt: string | null
+  completedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface ClipPresetRange {
   label: string
   startMs: number
