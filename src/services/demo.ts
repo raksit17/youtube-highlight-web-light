@@ -1,16 +1,17 @@
-import type { Candidate, CandidateContext, ClipDraft, Heatmap, RejectReason, ReviewStatus, Video } from '@/types/domain'
+import type { Candidate, CandidateContext, ClipDraft, ClipPreset, CreateClipPayload, UpdateClipPayload, Heatmap, RejectReason, ReviewStatus, Video } from '@/types/domain'
+import { buildAllPresets } from '@/utils/presets'
 
 const videoId = 'demo-big-buck-bunny'
 const ytId = 'aqz-KE-bpKQ'
 const STATUS_KEY = 'highlight-demo-reviews-v1'
-const CLIP_KEY = 'highlight-demo-clips-v1'
+const CLIP_KEY = 'highlight-demo-clips-v2'
 
 const defaultCandidates: Candidate[] = [
-  { id: 'moment-1', videoId, rank: 1, startMs: 210000, peakMs: 225000, endMs: 255000, finalScore: 96, category: 'FUNNY', status: 'NEW', summary: 'An unexpected moment prompts an animated response from viewers.', insights: { reasonLabel: 'Laughter spike', chatIncreasePercent: 421, messageCount: 245, uniqueChatters: 113, laughCount: 48, emojiCount: 31, isPotentialSpam: false, topTerms: ['WHAT', 'LMAO', 'NOOO'], density: [4,5,6,6,12,20,34,56,90,100,64,44,25,12] } },
-  { id: 'moment-2', videoId, rank: 2, startMs: 365000, peakMs: 380000, endMs: 410000, finalScore: 91, category: 'SURPRISE', status: 'NEW', summary: 'Sudden burst of excitement and surprise.', insights: { reasonLabel: 'Sudden chat burst', chatIncreasePercent: 330, messageCount: 193, uniqueChatters: 84, laughCount: 37, emojiCount: 21, isPotentialSpam: false, topTerms: ['WAIT', 'OMG', 'NO WAY'], density: [5,9,13,30,52,85,98,82,62,27,18,9,6,3] } },
-  { id: 'moment-3', videoId, rank: 3, startMs: 109000, peakMs: 124000, endMs: 154000, finalScore: 87, category: 'REACTION', status: 'NEW', summary: 'The chat reacts to a quick change in the scene.', insights: { reasonLabel: 'Strong audience reaction', chatIncreasePercent: 260, messageCount: 155, uniqueChatters: 71, laughCount: 22, emojiCount: 25, isPotentialSpam: false, topTerms: ['WTF', 'HAHA', 'WOW'], density: [3,4,8,22,50,80,97,60,30,19,13,10,5,3] } },
-  { id: 'moment-4', videoId, rank: 4, startMs: 473000, peakMs: 488000, endMs: 518000, finalScore: 77, category: 'CHAT_INTERACTION', status: 'NEW', summary: 'Longer conversation with a sustained volume increase.', insights: { reasonLabel: 'Active conversation', chatIncreasePercent: 145, messageCount: 104, uniqueChatters: 61, laughCount: 7, emojiCount: 18, isPotentialSpam: false, topTerms: ['YES', 'TRUE', 'LOOK'], density: [10,12,21,36,52,67,75,78,76,71,61,52,40,25] } },
-  { id: 'moment-5', videoId, rank: 5, startMs: 51000, peakMs: 66000, endMs: 96000, finalScore: 66, category: 'CONVERSATION', status: 'NEW', summary: 'A short burst appears to come from repeated messages.', insights: { reasonLabel: 'Possible spam — low author diversity', chatIncreasePercent: 280, messageCount: 90, uniqueChatters: 9, laughCount: 3, emojiCount: 7, isPotentialSpam: true, topTerms: ['HEY', 'HEY', 'HEY'], density: [3,8,5,78,89,95,91,85,10,5,2,1,2,1] } },
+  { id: 'moment-1', videoId, rank: 1, startMs: 210000, peakMs: 225000, endMs: 255000, finalScore: 96, category: 'FUNNY', status: 'NEW', summary: 'An unexpected moment prompts an animated response from viewers.', clipPresets: buildAllPresets(225000, 596000), insights: { reasonLabel: 'Laughter spike', chatIncreasePercent: 421, messageCount: 245, uniqueChatters: 113, laughCount: 48, emojiCount: 31, isPotentialSpam: false, topTerms: ['WHAT', 'LMAO', 'NOOO'], density: [4,5,6,6,12,20,34,56,90,100,64,44,25,12] } },
+  { id: 'moment-2', videoId, rank: 2, startMs: 365000, peakMs: 380000, endMs: 410000, finalScore: 91, category: 'SURPRISE', status: 'NEW', summary: 'Sudden burst of excitement and surprise.', clipPresets: buildAllPresets(380000, 596000), insights: { reasonLabel: 'Sudden chat burst', chatIncreasePercent: 330, messageCount: 193, uniqueChatters: 84, laughCount: 37, emojiCount: 21, isPotentialSpam: false, topTerms: ['WAIT', 'OMG', 'NO WAY'], density: [5,9,13,30,52,85,98,82,62,27,18,9,6,3] } },
+  { id: 'moment-3', videoId, rank: 3, startMs: 109000, peakMs: 124000, endMs: 154000, finalScore: 87, category: 'REACTION', status: 'NEW', summary: 'The chat reacts to a quick change in the scene.', clipPresets: buildAllPresets(124000, 596000), insights: { reasonLabel: 'Strong audience reaction', chatIncreasePercent: 260, messageCount: 155, uniqueChatters: 71, laughCount: 22, emojiCount: 25, isPotentialSpam: false, topTerms: ['WTF', 'HAHA', 'WOW'], density: [3,4,8,22,50,80,97,60,30,19,13,10,5,3] } },
+  { id: 'moment-4', videoId, rank: 4, startMs: 473000, peakMs: 488000, endMs: 518000, finalScore: 77, category: 'CHAT_INTERACTION', status: 'NEW', summary: 'Longer conversation with a sustained volume increase.', clipPresets: buildAllPresets(488000, 596000), insights: { reasonLabel: 'Active conversation', chatIncreasePercent: 145, messageCount: 104, uniqueChatters: 61, laughCount: 7, emojiCount: 18, isPotentialSpam: false, topTerms: ['YES', 'TRUE', 'LOOK'], density: [10,12,21,36,52,67,75,78,76,71,61,52,40,25] } },
+  { id: 'moment-5', videoId, rank: 5, startMs: 51000, peakMs: 66000, endMs: 96000, finalScore: 66, category: 'CONVERSATION', status: 'NEW', summary: 'A short burst appears to come from repeated messages.', clipPresets: buildAllPresets(66000, 596000), insights: { reasonLabel: 'Possible spam — low author diversity', chatIncreasePercent: 280, messageCount: 90, uniqueChatters: 9, laughCount: 3, emojiCount: 7, isPotentialSpam: true, topTerms: ['HEY', 'HEY', 'HEY'], density: [3,8,5,78,89,95,91,85,10,5,2,1,2,1] } },
 ]
 
 function getReviews(): Record<string, { status: ReviewStatus; reason?: RejectReason }> {
@@ -91,10 +92,77 @@ export function demoUpdateReview(candidateId: string, status: ReviewStatus, reas
   return candidate
 }
 
-export function demoCreateClip(input: Omit<ClipDraft, 'id' | 'status'>): ClipDraft {
+export function demoListClips(videoId: string): ClipDraft[] {
+  return getClips().filter((clip) => clip.videoId === videoId).sort((a, b) => (b.createdAt ?? '').localeCompare(a.createdAt ?? ''))
+}
+
+export function demoGetClip(id: string): ClipDraft {
+  const result = getClips().find((clip) => clip.id === id)
+  if (!result) throw new Error('Clip draft not found')
+  return result
+}
+
+export function demoCreateClip(videoId: string, input: CreateClipPayload): ClipDraft {
+  const candidate = demoCandidates().find((m) => m.id === input.candidateId && m.videoId === videoId)
+  if (!candidate) throw new Error('Candidate not found for this video')
+  const preset: ClipPreset = input.preset
+  const range = candidate.clipPresets[preset]
+  const startMs = input.startMs ?? range.startMs
+  const endMs = input.endMs ?? range.endMs
+  if (startMs < 0 || startMs >= endMs || endMs > 596000 || candidate.peakMs < startMs || candidate.peakMs > endMs) {
+    throw new Error('Invalid clip range: peak must be inside the clip')
+  }
   const clips = getClips()
-  const draft: ClipDraft = { ...input, id: crypto.randomUUID(), status: 'DRAFT' }
+  const now = new Date().toISOString()
+  const draft: ClipDraft = {
+    id: crypto.randomUUID(), videoId, candidateId: candidate.id,
+    startMs, endMs, peakMs: candidate.peakMs, durationMs: endMs - startMs,
+    title: input.title ?? null, note: input.note ?? null,
+    status: 'DRAFT', sourcePreset: preset,
+    isCustomized: startMs !== range.startMs || endMs !== range.endMs,
+    createdAt: now, updatedAt: now,
+  }
   clips.push(draft)
   localStorage.setItem(CLIP_KEY, JSON.stringify(clips))
   return draft
+}
+
+export function demoUpdateClip(id: string, input: UpdateClipPayload): ClipDraft {
+  const clips = getClips()
+  const index = clips.findIndex((clip) => clip.id === id)
+  if (index === -1) throw new Error('Clip draft not found')
+  const previous = clips[index]
+  const startMs = input.startMs ?? previous.startMs
+  const endMs = input.endMs ?? previous.endMs
+  if (startMs < 0 || startMs >= endMs || endMs > 596000 || (previous.peakMs != null && (startMs > previous.peakMs || endMs < previous.peakMs))) {
+    throw new Error('Invalid range: must include highlight peak and fit within video')
+  }
+  const changed = startMs !== previous.startMs || endMs !== previous.endMs
+  const updated: ClipDraft = {
+    ...previous, ...input, startMs, endMs, durationMs: endMs - startMs,
+    isCustomized: previous.isCustomized || changed,
+    updatedAt: new Date().toISOString(),
+  }
+  clips[index] = updated
+  localStorage.setItem(CLIP_KEY, JSON.stringify(clips))
+  return updated
+}
+
+export function demoExportClip(id: string) {
+  const draft = demoGetClip(id)
+  const video = demoVideos()[0]
+  const candidate = demoCandidates().find((c) => c.id === draft.candidateId)
+  return {
+    version: 1,
+    video: { id: video.id, provider: video.provider, externalId: video.externalId, url: video.url, title: video.title, durationMs: video.durationMs },
+    clip: {
+      id: draft.id, title: draft.title, startMs: draft.startMs, peakMs: draft.peakMs,
+      endMs: draft.endMs, durationMs: draft.durationMs,
+      startSeconds: draft.startMs / 1000, peakSeconds: draft.peakMs == null ? null : draft.peakMs / 1000,
+      endSeconds: draft.endMs / 1000, status: draft.status,
+      sourcePreset: draft.sourcePreset, isCustomized: draft.isCustomized,
+    },
+    sourceCandidate: candidate ? { id: candidate.id, rank: candidate.rank, finalScore: candidate.finalScore, category: candidate.category, summary: candidate.summary } : null,
+    exportedAt: new Date().toISOString(),
+  }
 }

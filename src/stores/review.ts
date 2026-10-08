@@ -1,7 +1,12 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { highlightApi } from '@/services/api'
-import type { Candidate, CandidateContext, Heatmap, RejectReason, ReviewStatus, Video } from '@/types/domain'
+import type { Candidate, CandidateContext, ClipPreset, Heatmap, RejectReason, ReviewStatus, Video } from '@/types/domain'
+
+function readSavedPreset(): ClipPreset {
+  const saved = localStorage.getItem('highlight-preset-v1')
+  return saved === 'QUICK' || saved === 'CONTEXT' || saved === 'STANDARD' || saved === 'LONG' ? saved : 'STANDARD'
+}
 
 export const useReviewStore = defineStore('review', () => {
   const video = ref<Video | null>(null)
@@ -9,12 +14,18 @@ export const useReviewStore = defineStore('review', () => {
   const heatmap = ref<Heatmap | null>(null)
   const context = ref<CandidateContext | null>(null)
   const selectedId = ref<string | null>(null)
+  const selectedPreset = ref<ClipPreset>(readSavedPreset())
   const loading = ref(false)
   const contextLoading = ref(false)
   const saving = ref(false)
   const error = ref('')
   const filter = ref<'ALL' | 'VERY_HOT' | 'FUNNY' | 'REACTION' | 'CHAT' | 'APPROVED'>('ALL')
   let requestToken = 0
+
+  function setPreset(preset: ClipPreset) {
+    selectedPreset.value = preset
+    localStorage.setItem('highlight-preset-v1', preset)
+  }
 
   const selected = computed(() => candidates.value.find((c) => c.id === selectedId.value) ?? null)
   const filteredCandidates = computed(() => candidates.value.filter((c) => {
@@ -95,5 +106,5 @@ export const useReviewStore = defineStore('review', () => {
     return null
   }
 
-  return { video, candidates, heatmap, context, selectedId, selected, loading, contextLoading, saving, error, filter, filteredCandidates, reviewedCount, load, select, review, nextUnreviewed }
+  return { video, candidates, heatmap, context, selectedId, selectedPreset, setPreset, selected, loading, contextLoading, saving, error, filter, filteredCandidates, reviewedCount, load, select, review, nextUnreviewed }
 })

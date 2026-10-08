@@ -2,7 +2,9 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useReviewStore } from '@/stores/review'
-import type { Candidate, RejectReason } from '@/types/domain'
+import type { Candidate, ClipDraft, ClipPreset, RejectReason } from '@/types/domain'
+import { highlightApi } from '@/services/api'
+import { CLIP_PRESET_CONFIG, PRESET_ORDER } from '@/utils/presets'
 import { formatNumber, formatTime } from '@/utils/time'
 import { isDemoMode } from '@/services/api'
 import YouTubePlayer from '@/components/YouTubePlayer.vue'
@@ -23,6 +25,8 @@ const pendingClipEndMs = ref<number | null>(null)
 const rejectOpen = ref(false)
 const showShortcuts = ref(false)
 const toast = ref('')
+const creatingClip = ref(false)
+const savedDrafts = ref<ClipDraft[]>([])
 const filters = [
   { id: 'ALL', text: 'All moments' },
   { id: 'VERY_HOT', text: '🔥 Very hot' },
@@ -42,8 +46,9 @@ async function preview(candidate: Candidate) {
   pendingClipEndMs.value = null
   await store.select(candidate.id)
   await nextTick()
-  const startMs = Math.max(0, candidate.peakMs - 15000)
-  previewEndMs.value = Math.min(store.video?.durationMs ?? candidate.peakMs + 30000, candidate.peakMs + 30000)
+  const range = candidate.clipPresets[store.selectedPreset]
+  const startMs = range?.startMs ?? Math.max(0, candidate.peakMs - 15000)
+  previewEndMs.value = range?.endMs ?? Math.min(store.video?.durationMs ?? candidate.peakMs + 30000, candidate.peakMs + 30000)
   player.value?.seekTo(startMs / 1000)
   currentMs.value = startMs
 }
@@ -70,15 +75,44 @@ async function submitReview(status: 'APPROVED' | 'REJECTED', reason?: RejectReas
     else player.value?.pause()
   } catch { toast.value = 'Could not save review' }
 }
-function openClip(candidate?: Candidate | null) {
-  const id = candidate?.id ?? store.selectedId
-  if (id) router.push({
-    path: `/videos/${route.params.id}/clip/${id}`,
-    query: {
-      ...(pendingClipStartMs.value !== null ? { startMs: String(pendingClipStartMs.value) } : {}),
-      ...(pendingClipEndMs.value !== null ? { endMs: String(pendingClipEndMs.value) } : {}),
-    },
-  })
+async function openClip(candidate?: Candidate | null) {
+  const target = candidate ?? store.selected
+  if (!target || !store.video || creatingClip.value) return
+  creatingClip.value = true
+  store.error = ''
+  try {
+    const range = target.clipPresets[store.selectedPreset]
+    const customStart = target.id === store.selectedId ? pendingClipStartMs.value : null
+    const customEnd = target.id === store.selectedId ? pendingClipEndMs.value : null
+    const startMs = customStart ?? range.startMs
+    const endMs = customEnd ?? range.endMs
+    if (startMs < 0 || startMs >= endMs || endMs > store.video.durationMs || startMs > target.peakMs || endMs < target.peakMs) {
+      throw new Error('Custom Start/End must be valid and include the detected peak.')
+    }
+    const draft = await highlightApi.createClip(store.video.id, {
+      candidateId: target.id,
+      preset: store.selectedPreset,
+      ...(customStart != null || customEnd != null ? { startMs, endMs } : {}),
+    })
+    savedDrafts.value.unshift(draft)
+    await router.push({ path: `/videos/${store.video.id}/clip/${target.id}`, query: { draftId: draft.id } })
+  } catch (err) {
+    store.error = err instanceof Error ? err.message : 'Could not create clip draft'
+  } finally {
+    creatingClip.value = false
+  }
+}
+async function loadPage(id: string) {
+  await store.load(id)
+  if (!store.video) return
+  try { savedDrafts.value = await highlightApi.listClips(id) }
+  catch { savedDrafts.value = [] } // Draft list is secondary to reviewing.
+}
+function changePreset(preset: ClipPreset) {
+  store.setPreset(preset)
+  pendingClipStartMs.value = null
+  pendingClipEndMs.value = null
+  if (store.selected) void preview(store.selected)
 }
 function seekBy(milliseconds: number) {
   const to = Math.max(0, Math.min(store.video?.durationMs ?? Infinity, currentMs.value + milliseconds))
@@ -103,11 +137,11 @@ function onKeydown(event: KeyboardEvent) {
   if (event.code === 'KeyR') rejectOpen.value = !rejectOpen.value
   if (event.code === 'KeyI') { pendingClipStartMs.value = Math.round(currentMs.value / 1000) * 1000; toast.value = `Clip start: ${formatTime(pendingClipStartMs.value)}` }
   if (event.code === 'KeyO') { pendingClipEndMs.value = Math.round(currentMs.value / 1000) * 1000; toast.value = `Clip end: ${formatTime(pendingClipEndMs.value)}` }
-  if (event.code === 'KeyC') openClip()
+  if (event.code === 'KeyC') void openClip()
 }
-onMounted(() => { window.addEventListener('keydown', onKeydown); void store.load(String(route.params.id)) })
+onMounted(() => { window.addEventListener('keydown', onKeydown); void loadPage(String(route.params.id)) })
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
-watch(() => route.params.id, (id) => { if (id) void store.load(String(id)) })
+watch(() => route.params.id, (id) => { if (id) void loadPage(String(id)) })
 </script>
 
 <template>
@@ -121,15 +155,15 @@ watch(() => route.params.id, (id) => { if (id) void store.load(String(id)) })
       <div class="review-layout">
         <div class="review-left">
           <section class="card player-panel"><div class="player-header"><span class="player-label"><span class="red-dot"></span> VIDEO PLAYER</span><span v-if="store.selected" class="currently-reviewing">Reviewing <b>#{{ store.selected.rank }}</b> of {{ store.candidates.length }}</span></div>
-            <YouTubePlayer ref="player" :video-id="store.video.externalId" :preview-end-ms="previewEndMs" @timeupdate="currentMs = $event" @statechange="playing = $event" />
-            <div class="player-tools"><div class="time-display">{{ formatTime(currentMs) }} <span>/ {{ formatTime(store.video.durationMs) }}</span></div><div class="transport"><button title="Back 5s" @click="seekBy(-5000)"><SkipBack :size="18" /></button><button class="transport-play" title="Play / Pause" @click="player?.toggle()"><Pause v-if="playing" :size="18" fill="currentColor" /><Play v-else :size="18" fill="currentColor" /></button><button title="Forward 5s" @click="seekBy(5000)"><SkipForward :size="18" /></button></div><span class="preview-hint">Preview: −15s / +30s</span></div>
+            <YouTubePlayer ref="player" :video-id="store.video.externalId" :preview-end-ms="previewEndMs" @ready="store.selected && preview(store.selected)" @timeupdate="currentMs = $event" @statechange="playing = $event" />
+            <div class="player-tools"><div class="time-display">{{ formatTime(currentMs) }} <span>/ {{ formatTime(store.video.durationMs) }}</span></div><div class="transport"><button title="Back 5s" @click="seekBy(-5000)"><SkipBack :size="18" /></button><button class="transport-play" title="Play / Pause" @click="player?.toggle()"><Pause v-if="playing" :size="18" fill="currentColor" /><Play v-else :size="18" fill="currentColor" /></button><button title="Forward 5s" @click="seekBy(5000)"><SkipForward :size="18" /></button></div><span class="preview-hint">Preview: {{ store.selectedPreset }} · {{ store.selected?.clipPresets[store.selectedPreset] ? formatTime(store.selected.clipPresets[store.selectedPreset].durationMs) : "—" }}</span></div>
           </section>
           <HeatTimeline :heatmap="store.heatmap" :selected-id="store.selectedId" :current-ms="currentMs" @seek="seekTo" @select="goToCandidate" />
           <ContextPanel :context="store.context" :loading="store.contextLoading" />
         </div>
-        <aside class="review-right"><div class="card moments-panel"><div class="moment-panel-top"><div><div class="section-heading-with-icon"><Flame :size="21" class="flame-icon" /><h2>Hot moments</h2><span class="moment-count">{{ store.filteredCandidates.length }}</span></div><p>AI-ranked highlights. Best first.</p></div><span class="sort-label">TOP SCORE <ChevronDown :size="14" /></span></div><div class="filter-row"><button v-for="filter in filters" :key="filter.id" class="filter-chip" :class="{ active: store.filter === filter.id }" @click="store.filter = filter.id">{{ filter.text }}</button></div><div class="review-progress-box"><div class="progress-caption"><span>REVIEW PROGRESS</span><strong>{{ store.reviewedCount }} / {{ store.candidates.length }}</strong></div><div class="progress-track"><div :style="{ width: `${progressPercent}%` }"></div></div></div><div class="moment-scroll"><MomentCard v-for="moment in store.filteredCandidates" :key="moment.id" :moment="moment" :active="store.selectedId === moment.id" @preview="preview" @clip="openClip" /><div v-if="!store.filteredCandidates.length" class="empty-inline">No moments match this filter.</div></div>
-            <div v-if="store.selected" class="review-action-panel"><div class="action-top"><strong>Decision for #{{ store.selected.rank }}</strong><span><CircleHelp :size="14" /> Review and continue</span></div><div class="review-buttons"><button class="button button-approve" :disabled="store.saving" @click="submitReview('APPROVED')"><Check :size="18" /> Approve <kbd>A</kbd></button><button class="button button-reject" :disabled="store.saving" @click="rejectOpen = !rejectOpen"><X :size="18" /> Reject <kbd>R</kbd></button></div><div v-if="rejectOpen" class="reject-reasons"><span>Why reject?</span><div><button v-for="reason in rejectReasons" :key="reason.id" class="reason-button" @click="submitReview('REJECTED', reason.id)">{{ reason.text }}</button></div></div><button class="clip-link" @click="openClip()"><Scissors :size="15" /> Open clip editor <ArrowRight :size="15" /></button></div>
-          </div></aside>
+        <aside class="review-right"><div class="card moments-panel"><div class="moment-panel-top"><div><div class="section-heading-with-icon"><Flame :size="21" class="flame-icon" /><h2>Hot moments</h2><span class="moment-count">{{ store.filteredCandidates.length }}</span></div><p>AI-ranked highlights. Best first.</p></div><span class="sort-label">TOP SCORE <ChevronDown :size="14" /></span></div><div class="filter-row"><button v-for="filter in filters" :key="filter.id" class="filter-chip" :class="{ active: store.filter === filter.id }" @click="store.filter = filter.id">{{ filter.text }}</button></div><div class="preset-section"><div class="preset-section-heading"><strong>CLIP LENGTH</strong><span>{{ store.candidates.length }} moments · 4 ranges each</span></div><div class="preset-grid"><button v-for="preset in PRESET_ORDER" :key="preset" type="button" class="preset-chip" :class="{ active: store.selectedPreset === preset }" @click="changePreset(preset)"><strong>{{ CLIP_PRESET_CONFIG[preset].title }}<span v-if="preset === 'STANDARD'"> ★</span></strong><small>{{ CLIP_PRESET_CONFIG[preset].label }}</small></button></div></div><div class="review-progress-box"><div class="progress-caption"><span>REVIEW PROGRESS</span><strong>{{ store.reviewedCount }} / {{ store.candidates.length }}</strong></div><div class="progress-track"><div :style="{ width: `${progressPercent}%` }"></div></div></div><div class="moment-scroll"><MomentCard v-for="moment in store.filteredCandidates" :key="moment.id" :moment="moment" :preset="store.selectedPreset" :disabled="creatingClip" :active="store.selectedId === moment.id" @preview="preview" @clip="openClip" /><div v-if="!store.filteredCandidates.length" class="empty-inline">No moments match this filter.</div></div>
+            <div v-if="store.selected" class="review-action-panel"><div class="action-top"><strong>Decision for #{{ store.selected.rank }}</strong><span><CircleHelp :size="14" /> Review and continue</span></div><div class="review-buttons"><button class="button button-approve" :disabled="store.saving" @click="submitReview('APPROVED')"><Check :size="18" /> Approve <kbd>A</kbd></button><button class="button button-reject" :disabled="store.saving" @click="rejectOpen = !rejectOpen"><X :size="18" /> Reject <kbd>R</kbd></button></div><div v-if="rejectOpen" class="reject-reasons"><span>Why reject?</span><div><button v-for="reason in rejectReasons" :key="reason.id" class="reason-button" @click="submitReview('REJECTED', reason.id)">{{ reason.text }}</button></div></div><button class="clip-link" :disabled="creatingClip" @click="openClip()"><Scissors :size="15" /> {{ creatingClip ? "Creating draft..." : `Create ${store.selectedPreset} clip draft` }} <ArrowRight :size="15" /></button></div>
+          </div><div v-if="savedDrafts.length" class="saved-drafts-mini"><strong>Saved clip drafts ({{ savedDrafts.length }})</strong><router-link v-for="draft in savedDrafts.slice(0, 5)" :key="draft.id" :to="`/videos/${route.params.id}/clip/${draft.candidateId || 'manual'}?draftId=${draft.id}`"><Scissors :size="13" /> {{ draft.sourcePreset || 'CUSTOM' }} · {{ formatTime(draft.startMs) }}–{{ formatTime(draft.endMs) }} <ArrowRight :size="12" /></router-link></div></aside>
       </div>
       <div v-if="toast" class="toast" role="status" @click="toast = ''">{{ toast }} <X :size="14" /></div>
       <div v-if="store.error" class="error-banner">{{ store.error }}</div>

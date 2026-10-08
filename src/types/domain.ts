@@ -1,6 +1,16 @@
 export type ReviewStatus = 'NEW' | 'REVIEWING' | 'APPROVED' | 'REJECTED' | 'CLIPPED'
 export type RejectReason = 'SPAM' | 'NOT_INTERESTING' | 'REPEATED_EVENT' | 'BAD_CONTEXT' | 'OTHER'
 export type MomentCategory = 'FUNNY' | 'SURPRISE' | 'REACTION' | 'CHAT_INTERACTION' | 'CONVERSATION' | string
+export type ClipPreset = 'QUICK' | 'CONTEXT' | 'STANDARD' | 'LONG'
+export type ClipDraftStatus = 'DRAFT' | 'READY' | 'EXPORTED'
+
+export interface ClipPresetRange {
+  label: string
+  startMs: number
+  endMs: number
+  durationMs: number
+}
+export type ClipPresets = Record<ClipPreset, ClipPresetRange>
 
 export interface ReviewSummary {
   total: number
@@ -9,7 +19,6 @@ export interface ReviewSummary {
   rejected: number
   clipped: number
 }
-
 export interface Video {
   id: string
   provider: string
@@ -30,7 +39,6 @@ export interface Video {
   }
   review: ReviewSummary
 }
-
 export interface MomentInsights {
   reasonLabel: string
   chatIncreasePercent: number | null
@@ -42,7 +50,6 @@ export interface MomentInsights {
   topTerms: string[]
   density?: number[]
 }
-
 export interface Candidate {
   id: string
   videoId: string
@@ -55,16 +62,15 @@ export interface Candidate {
   status: ReviewStatus
   summary: string | null
   insights: MomentInsights
+  clipPresets: ClipPresets
   rejectionReason?: RejectReason | null
 }
-
 export interface HeatBucket {
   startMs: number
   endMs: number
   messageCount: number
   normalizedHeat: number
 }
-
 export interface Heatmap {
   videoId: string
   durationMs: number
@@ -73,14 +79,12 @@ export interface Heatmap {
   buckets: HeatBucket[]
   markers: Array<{ candidateId: string; rank: number; peakMs: number; score: number }>
 }
-
 export interface ContextRow {
   type: 'chat' | 'transcript'
   timestampMs: number
   authorName: string | null
   text: string
 }
-
 export interface CandidateContext {
   candidateId: string
   peakMs: number
@@ -88,15 +92,34 @@ export interface CandidateContext {
   chatTotal: number
   truncated: boolean
 }
-
 export interface ClipDraft {
   id: string
   videoId: string
-  candidateId: string
+  candidateId: string | null
   startMs: number
   endMs: number
-  peakMs: number
-  title: string
-  reason: string
-  status: 'DRAFT' | 'READY' | 'EXPORTED'
+  peakMs: number | null
+  durationMs: number
+  title: string | null
+  note: string | null
+  status: ClipDraftStatus
+  sourcePreset: ClipPreset | null
+  isCustomized: boolean
+  createdAt?: string
+  updatedAt?: string
+}
+export interface CreateClipPayload {
+  candidateId: string
+  preset: ClipPreset
+  startMs?: number
+  endMs?: number
+  title?: string
+  note?: string
+}
+export interface UpdateClipPayload {
+  startMs?: number
+  endMs?: number
+  title?: string
+  note?: string
+  status?: ClipDraftStatus
 }
