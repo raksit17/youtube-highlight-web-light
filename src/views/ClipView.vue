@@ -32,6 +32,7 @@ const includeSubtitles = ref(false)
 const renderJob = ref<RenderJob | null>(null)
 const renderError = ref('')
 const downloading = ref(false)
+const downloadingSubtitle = ref(false)
 let renderPollTimer: number | undefined
 const candidate = computed(() => store.candidates.find((m) => m.id === route.params.candidateId) ?? null)
 const sourcePreset = computed(() => draft.value?.sourcePreset ?? store.selectedPreset)
@@ -170,6 +171,43 @@ async function downloadRenderedVideo() {
   }
 }
 
+
+async function downloadSubtitle(format: 'srt' | 'vtt') {
+  if (!draft.value || !valid.value || downloadingSubtitle.value) return
+
+  if (isDemoMode) {
+    error.value = 'Subtitle download requires the NestJS backend.'
+    return
+  }
+
+  // The server calculates subtitle offsets from the saved Draft range.
+  if (isDirty.value) {
+    const saved = await saveDraft()
+    if (!saved) return
+  }
+
+  downloadingSubtitle.value = true
+  error.value = ''
+  success.value = ''
+
+  try {
+    const blob = await highlightApi.downloadSubtitle(draft.value.id, format)
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `clip-${draft.value.id}.${format}`
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    success.value = `${format.toUpperCase()} subtitle download started.`
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Subtitle download failed'
+  } finally {
+    downloadingSubtitle.value = false
+  }
+}
+
 function applyDraft(value: ClipDraft) {
   draft.value = value
   resetExactRange.value = null
@@ -297,6 +335,29 @@ async function createOtherPreset(preset: ClipPreset) {
         <button class="button button-dark full-width" :disabled="!valid || saving" @click="saveDraft('READY')"><CheckCircle2 :size="17" /> Mark as READY</button>
         <button class="button button-outline full-width" :disabled="!valid || saving" @click="exportJson"><Download :size="17" /> Export timestamps JSON</button>
 
+        <div class="subtitle-export-actions">
+          <button
+            type="button"
+            class="button button-outline"
+            :disabled="!valid || saving || downloadingSubtitle || isDemoMode || store.video.transcriptCount <= 0"
+            @click="downloadSubtitle('srt')"
+          >
+            <Download :size="16" /> Export subtitle SRT
+          </button>
+          <button
+            type="button"
+            class="button button-outline"
+            :disabled="!valid || saving || downloadingSubtitle || isDemoMode || store.video.transcriptCount <= 0"
+            @click="downloadSubtitle('vtt')"
+          >
+            <Download :size="16" /> Export subtitle VTT
+          </button>
+        </div>
+        <p class="subtitle-export-hint">
+          Downloads an editable subtitle file rebased to 00:00:00 of the saved clip. Requires transcript data; does not translate automatically.
+        </p>
+
+
         <div class="render-form">
           <div class="render-form-heading">
             <div>
@@ -350,7 +411,7 @@ async function createOtherPreset(preset: ClipPreset) {
           <label class="render-checkbox" :class="{ disabled: store.video.transcriptCount <= 0 }">
             <input v-model="includeSubtitles" type="checkbox" :disabled="store.video.transcriptCount <= 0" />
             <span>
-              <strong>Include subtitles</strong>
+              <strong>Embed subtitle track in rendered video</strong>
               <small v-if="store.video.transcriptCount > 0">Use subtitle data when a supported subtitle source is available.</small>
               <small v-else>No transcript/subtitle source is available for this video.</small>
             </span>

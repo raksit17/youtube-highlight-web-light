@@ -107,6 +107,10 @@ export const highlightApi = {
     if (isDemoMode) throw new Error('Render jobs are only available when VITE_DEMO_MODE=false')
     return request<RenderJob>(`/render-jobs/${enc(id)}`)
   },
+  async downloadSubtitle(id: string, format: 'srt' | 'vtt'): Promise<Blob> {
+    if (isDemoMode) throw new Error('Subtitle downloads require VITE_DEMO_MODE=false')
+    return requestBlob(`/clips/${enc(id)}/subtitles?format=${format}`)
+  },
   async downloadRenderedClip(id: string): Promise<Blob> {
     if (isDemoMode) throw new Error('Rendered downloads are only available when VITE_DEMO_MODE=false')
     return requestBlob(`/clips/${enc(id)}/download`)
