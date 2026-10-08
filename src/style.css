@@ -61,3 +61,26 @@ textarea.text-input{font-family:inherit;resize:vertical;min-height:55px}
 .render-placeholder{margin-top:10px;padding:10px 11px;border-radius:8px;background:#f6f8fb;color:#8b96a4;font-size:9px;line-height:1.6}
 .render-placeholder code{color:#c46e32;font-weight:800}
 @media(max-width:500px){.render-grid,.render-mode-group,.render-summary{grid-template-columns:1fr}.render-summary>div{border-right:0;border-bottom:1px solid #eef0f3}.render-summary>div:last-child{border-bottom:0}.render-form-heading{flex-direction:column}}
+
+
+.render-connected{white-space:nowrap;border:1px solid #d9eadf;background:#f2fbf6;color:#3c8a60;border-radius:7px;padding:6px 8px;font-size:8px;font-weight:900;letter-spacing:.7px}
+.render-start-button{margin-top:12px!important}
+.render-job-card{margin-top:12px;border:1px solid #e6eaf0;border-radius:10px;background:#fafbfc;padding:13px}
+.render-job-card.completed{border-color:#d8eadf;background:#f7fcf9}
+.render-job-card.failed{border-color:#f0d1d1;background:#fff8f8}
+.render-job-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.render-job-header>div{display:flex;flex-direction:column;gap:3px}
+.render-job-header span{font-size:8px;font-weight:900;letter-spacing:.8px;color:#9aa5b3}
+.render-job-header strong{font-size:11px;color:#3b485b}
+.render-job-header b{font-size:17px;color:#d77c3b}
+.render-progress-track{height:7px;border-radius:8px;background:#e7ebf0;overflow:hidden;margin:11px 0 9px}
+.render-progress-track>div{height:100%;min-width:2px;background:#e88842;border-radius:8px;transition:width .3s ease}
+.render-job-card.completed .render-progress-track>div{background:#48a879}
+.render-job-card.failed .render-progress-track>div{background:#ca6767}
+.render-job-meta{display:flex;gap:7px;flex-wrap:wrap}
+.render-job-meta span{border:1px solid #e6eaf0;background:#fff;border-radius:5px;padding:4px 6px;font-size:8px;font-weight:800;color:#7b8797}
+.render-job-note{display:flex;align-items:center;gap:7px;color:#7d8999;font-size:9px;line-height:1.5;margin:11px 0 0}
+.render-job-error{color:#bc5555;background:#fff2f2;border:1px solid #f0d5d5;border-radius:7px;padding:9px 10px;font-size:9px;line-height:1.55;margin:10px 0 0}
+.render-download-button{margin-top:12px!important}
+.spin-icon{animation:render-spin 1s linear infinite}
+@keyframes render-spin{to{transform:rotate(360deg)}}
