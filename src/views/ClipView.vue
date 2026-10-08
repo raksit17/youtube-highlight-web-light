@@ -4,7 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Download, CheckCircle2, Save, Scissors, SkipBack, SkipForward, Play, RotateCcw } from 'lucide-vue-next'
 import { useReviewStore } from '@/stores/review'
 import { highlightApi, isDemoMode } from '@/services/api'
-import type { ClipDraft, ClipPreset } from '@/types/domain'
+import type { ClipDraft, ClipPreset, RenderFormat, RenderMode, RenderResolution } from '@/types/domain'
 import { CLIP_PRESET_CONFIG, PRESET_ORDER } from '@/utils/presets'
 import { formatTime, parseTime } from '@/utils/time'
 import YouTubePlayer from '@/components/YouTubePlayer.vue'
@@ -25,6 +25,10 @@ const loading = ref(true)
 const saving = ref(false)
 const success = ref('')
 const error = ref('')
+const renderFormat = ref<RenderFormat>('MP4')
+const renderResolution = ref<RenderResolution>('1080P')
+const renderMode = ref<RenderMode>('ACCURATE')
+const includeSubtitles = ref(false)
 const candidate = computed(() => store.candidates.find((m) => m.id === route.params.candidateId) ?? null)
 const sourcePreset = computed(() => draft.value?.sourcePreset ?? store.selectedPreset)
 const originalRange = computed(() => candidate.value?.clipPresets[sourcePreset.value])
@@ -37,6 +41,25 @@ const valid = computed(() => exactStartMs.value !== null && exactEndMs.value !==
 const isDirty = computed(() => draft.value && (exactStartMs.value !== draft.value.startMs || exactEndMs.value !== draft.value.endMs || title.value !== (draft.value.title ?? '') || note.value !== (draft.value.note ?? '')))
 const customized = computed(() => draft.value?.isCustomized || (draft.value && (exactStartMs.value !== originalRange.value?.startMs || exactEndMs.value !== originalRange.value?.endMs)))
 const clipDuration = computed(() => valid.value ? formatTime(exactEndMs.value! - exactStartMs.value!) : '--:--:--')
+const renderResolutionLabel = computed(() => ({
+  ORIGINAL: 'Original',
+  '1080P': '1080p — Full HD',
+  '720P': '720p — HD',
+}[renderResolution.value]))
+const renderModeLabel = computed(() => renderMode.value === 'ACCURATE' ? 'Accurate export' : 'Fast export')
+const renderOutputLabel = computed(() => `${renderFormat.value} · ${renderResolutionLabel.value} · ${renderModeLabel.value}`)
+const renderRequestPreview = computed(() => ({
+  clipId: draft.value?.id ?? null,
+  format: renderFormat.value,
+  resolution: renderResolution.value,
+  mode: renderMode.value,
+  includeSubtitles: includeSubtitles.value,
+  startMs: exactStartMs.value,
+  endMs: exactEndMs.value,
+  durationMs: valid.value && exactStartMs.value != null && exactEndMs.value != null
+    ? exactEndMs.value - exactStartMs.value
+    : null,
+}))
 
 function applyDraft(value: ClipDraft) {
   draft.value = value
@@ -153,6 +176,82 @@ async function createOtherPreset(preset: ClipPreset) {
         <button class="button button-orange full-width" :disabled="!valid || saving" @click="saveDraft()"><Save :size="17" /> {{ saving ? 'Saving...' : 'Save custom draft' }}</button>
         <button class="button button-dark full-width" :disabled="!valid || saving" @click="saveDraft('READY')"><CheckCircle2 :size="17" /> Mark as READY</button>
         <button class="button button-outline full-width" :disabled="!valid || saving" @click="exportJson"><Download :size="17" /> Export timestamps JSON</button>
+
+        <div class="render-form">
+          <div class="render-form-heading">
+            <div>
+              <span class="render-kicker">VIDEO EXPORT — PROTOTYPE</span>
+              <h3>Render options</h3>
+              <p>Configure the future FFmpeg render request. This form does not render or download video yet.</p>
+            </div>
+            <span class="render-coming-soon">API NOT CONNECTED</span>
+          </div>
+
+          <div class="render-grid">
+            <label class="field-label">Format
+              <select v-model="renderFormat" class="text-input">
+                <option value="MP4">MP4</option>
+                <option value="WEBM">WebM</option>
+              </select>
+            </label>
+
+            <label class="field-label">Resolution
+              <select v-model="renderResolution" class="text-input">
+                <option value="1080P">1080p — Full HD</option>
+                <option value="720P">720p — HD</option>
+                <option value="ORIGINAL">Original — source resolution</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="render-mode-group">
+            <button
+              type="button"
+              class="render-mode-card"
+              :class="{ active: renderMode === 'ACCURATE' }"
+              @click="renderMode = 'ACCURATE'"
+            >
+              <strong>Accurate Export</strong>
+              <span>Re-encode with FFmpeg for precise Start / End timestamps.</span>
+              <small>Recommended for translated clips</small>
+            </button>
+            <button
+              type="button"
+              class="render-mode-card"
+              :class="{ active: renderMode === 'FAST' }"
+              @click="renderMode = 'FAST'"
+            >
+              <strong>Fast Export</strong>
+              <span>Stream copy when possible. Faster, but cuts can move to nearby keyframes.</span>
+              <small>Best for quick previews</small>
+            </button>
+          </div>
+
+          <label class="render-checkbox" :class="{ disabled: store.video.transcriptCount <= 0 }">
+            <input v-model="includeSubtitles" type="checkbox" :disabled="store.video.transcriptCount <= 0" />
+            <span>
+              <strong>Include subtitles</strong>
+              <small v-if="store.video.transcriptCount > 0">Use subtitle data when a supported subtitle source is available.</small>
+              <small v-else>No transcript/subtitle source is available for this video.</small>
+            </span>
+          </label>
+
+          <div class="render-summary">
+            <div><span>Clip range</span><strong>{{ formatTime(exactStartMs ?? 0) }} → {{ formatTime(exactEndMs ?? 0) }}</strong></div>
+            <div><span>Duration</span><strong>{{ clipDuration }}</strong></div>
+            <div><span>Output</span><strong>{{ renderOutputLabel }}</strong></div>
+          </div>
+
+          <details class="render-request-preview">
+            <summary>Planned render request payload</summary>
+            <pre>{{ JSON.stringify(renderRequestPreview, null, 2) }}</pre>
+          </details>
+
+          <div class="render-placeholder">
+            Future flow: <code>POST /api/v1/clips/:id/render</code> → Render Job → FFmpeg Worker → Download.
+          </div>
+        </div>
+
         <p v-if="success" class="save-success"><CheckCircle2 :size="16" /> {{ success }}</p><p v-if="error" class="error-text">{{ error }}</p>
         <p v-if="isDemoMode" class="demo-note">Demo mode: clip drafts are saved locally, not in PostgreSQL.</p>
       </section>
