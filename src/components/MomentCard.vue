@@ -4,7 +4,7 @@ import { Play, Scissors, CheckCircle2, XCircle, AlertTriangle, Users, Smile, Mes
 import type { Candidate, ClipPreset } from '@/types/domain'
 import { formatTime } from '@/utils/time'
 
-const props = defineProps<{ moment: Candidate; active: boolean; preset: ClipPreset; disabled?: boolean }>()
+const props = defineProps<{ moment: Candidate; active: boolean; preset: ClipPreset; draftCount?: number; disabled?: boolean }>()
 const emit = defineEmits<{ preview: [moment: Candidate]; clip: [moment: Candidate] }>()
 const statusText = computed(() => ({ NEW: 'NEW', REVIEWING: 'REVIEWING', APPROVED: 'APPROVED', REJECTED: 'REJECTED', CLIPPED: 'CLIPPED' }[props.moment.status]))
 const bars = computed(() => props.moment.insights.density ?? [4, 9, 15, 32, 78, 100, 60, 31, 12, 6])
@@ -12,11 +12,12 @@ const range = computed(() => props.moment.clipPresets[props.preset])
 </script>
 
 <template>
-  <article class="moment-card" :class="{ selected: active, 'is-reviewed': moment.status === 'REJECTED' }" @click="emit('preview', moment)">
+  <article class="moment-card" :class="{ selected: active, 'has-draft': (draftCount ?? 0) > 0, 'is-reviewed': moment.status === 'REJECTED' }" @click="emit('preview', moment)">
     <div class="moment-row">
       <div class="moment-rank">#{{ moment.rank }}</div>
       <div class="moment-time">{{ formatTime(moment.peakMs) }}</div>
       <span class="status-badge" :class="moment.status.toLowerCase()">{{ statusText }}</span>
+      <span v-if="draftCount" class="drafted-badge" :title="`${draftCount} saved clip draft(s)`"><CheckCircle2 :size="12" /> Drafted<span v-if="draftCount > 1"> · {{ draftCount }}</span></span>
       <div class="score-wrap"><span>HOT SCORE</span><strong>{{ Math.round(moment.finalScore) }}</strong></div>
     </div>
     <div class="moment-label">{{ moment.insights.reasonLabel }}</div>
@@ -26,6 +27,6 @@ const range = computed(() => props.moment.clipPresets[props.preset])
     <div class="moment-metrics"><span><MessageCircle :size="13" /> {{ moment.insights.chatIncreasePercent !== null ? `+${Math.round(moment.insights.chatIncreasePercent)}%` : 'New burst' }}</span><span><Users :size="13" /> {{ moment.insights.uniqueChatters }}</span><span><Smile :size="13" /> {{ moment.insights.laughCount }}</span></div>
     <div v-if="moment.insights.isPotentialSpam" class="spam-warning"><AlertTriangle :size="13" /> Possible spam — low author diversity</div>
     <div class="term-list"><span v-for="(term, index) in moment.insights.topTerms.slice(0, 3)" :key="index">{{ term }}</span></div>
-    <div class="moment-actions"><button type="button" class="button button-soft button-small" @click.stop="emit('preview', moment)"><Play :size="14" fill="currentColor" /> Preview</button><button type="button" class="button button-outline button-small" :disabled="disabled" @click.stop="emit('clip', moment)"><Scissors :size="14" /> {{ disabled ? 'Creating...' : 'Clip draft' }}</button><CheckCircle2 v-if="moment.status === 'APPROVED' || moment.status === 'CLIPPED'" class="review-icon approved-icon" :size="18" /><XCircle v-else-if="moment.status === 'REJECTED'" class="review-icon rejected-icon" :size="18" /></div>
+    <div class="moment-actions"><button type="button" class="button button-soft button-small" @click.stop="emit('preview', moment)"><Play :size="14" fill="currentColor" /> Preview</button><button type="button" class="button button-outline button-small" :class="{ 'button-drafted': (draftCount ?? 0) > 0 }" :title="draftCount ? 'Draft already exists — create another clip draft' : 'Create clip draft'" :disabled="disabled" @click.stop="emit('clip', moment)"><Scissors :size="14" /> {{ disabled ? 'Creating...' : draftCount ? 'Clip again' : 'Clip draft' }}</button><CheckCircle2 v-if="moment.status === 'APPROVED' || moment.status === 'CLIPPED'" class="review-icon approved-icon" :size="18" /><XCircle v-else-if="moment.status === 'REJECTED'" class="review-icon rejected-icon" :size="18" /></div>
   </article>
 </template>
