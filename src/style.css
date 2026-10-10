@@ -96,3 +96,11 @@ textarea.text-input{font-family:inherit;resize:vertical;min-height:55px}
 .filename-preview strong{font-size:9px;letter-spacing:1px;color:#b66f39}
 .filename-preview span{font-size:11px;font-weight:700;color:#435167;word-break:break-all}
 .filename-preview small{font-size:9px;color:#9aa5b2;line-height:1.5}
+
+/* Clip draft history: persisted by the backend and displayed on every review visit. */
+.moment-card.has-draft{border-color:#addbc4;background:#f7fcf9;box-shadow:inset 3px 0 0 #35a576}
+.moment-card.has-draft:hover{border-color:#66bd91}
+.moment-card.has-draft.selected{border-color:#ed914f;background:#fffbf7;box-shadow:inset 3px 0 0 #35a576,0 2px 9px #f8a75c10}
+.drafted-badge{display:inline-flex;align-items:center;gap:4px;border:1px solid #c6e8d6;background:#e9f7ef;color:#25875d;border-radius:5px;padding:4px 6px;font-size:9px;font-weight:800;white-space:nowrap}
+.button.button-drafted{border-color:#a8ddbf;background:#e8f7ef;color:#27865c;font-weight:800}
+.clip-link.has-draft{color:#27865c}
