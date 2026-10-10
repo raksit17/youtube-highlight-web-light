@@ -123,10 +123,15 @@ export const highlightApi = {
     if (isDemoMode) throw new Error('Render jobs are only available when VITE_DEMO_MODE=false')
     return request<RenderJob>(`/render-jobs/${enc(id)}`)
   },
-  async downloadSubtitle(id: string, format: 'srt' | 'vtt', renderJobId?: string): Promise<DownloadedFile> {
+  async downloadSubtitle(
+    id: string,
+    format: 'srt' | 'vtt',
+    renderJobId?: string,
+    language: 'en' | 'th' | 'th-en' = 'en',
+  ): Promise<DownloadedFile> {
     if (isDemoMode) throw new Error('Subtitle downloads require VITE_DEMO_MODE=false')
     const path = renderJobId
-      ? `/render-jobs/${enc(renderJobId)}/subtitles?format=${format}`
+      ? `/render-jobs/${enc(renderJobId)}/subtitles?format=${format}&language=${language}`
       : `/clips/${enc(id)}/subtitles?format=${format}`
     return requestBlob(path)
   },

@@ -29,6 +29,7 @@ export interface RenderJob {
   outputFilename: string | null
   filenameStem: string | null
   subtitleFilename: string | null
+  subtitleLanguages: Array<'en' | 'th' | 'th-en'>
   clipStartMs: number | null
   clipEndMs: number | null
   downloadUrl: string | null

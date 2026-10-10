@@ -172,7 +172,7 @@ async function downloadRenderedVideo() {
   }
 }
 
-async function downloadSubtitle(format: 'srt' | 'vtt') {
+async function downloadSubtitle(format: 'srt' | 'vtt', language: 'en' | 'th' | 'th-en' = 'en') {
   if (!draft.value || !valid.value || downloadingSubtitle.value) return
   if (isDemoMode) {
     error.value = 'Subtitle download requires the NestJS backend.'
@@ -180,6 +180,14 @@ async function downloadSubtitle(format: 'srt' | 'vtt') {
   }
   // Prefer a completed render's immutable subtitle snapshot, not an edited draft.
   const renderJobId = renderCompleted.value ? renderJob.value?.id : undefined
+  if (language !== 'en' && !renderJobId) {
+    error.value = 'Render the clip first to create translated MADLAD subtitles.'
+    return
+  }
+  if (renderJobId && !renderJob.value?.subtitleLanguages?.includes(language)) {
+    error.value = 'This subtitle track is not available. Check the MADLAD service at localhost:8001.'
+    return
+  }
   if (!renderJobId && isDirty.value) {
     if (!(await saveDraft())) return
   }
@@ -188,10 +196,11 @@ async function downloadSubtitle(format: 'srt' | 'vtt') {
   error.value = ''
   success.value = ''
   try {
-    const file = await highlightApi.downloadSubtitle(draft.value.id, format, renderJobId)
+    const file = await highlightApi.downloadSubtitle(draft.value.id, format, renderJobId, language)
     const stem = renderJob.value?.filenameStem || 'highlight'
-    const language = renderJob.value?.subtitleFilename?.match(/\.([a-z0-9-]+)\.srt$/i)?.[1] || 'en'
-    triggerDownload(file, `${stem}.${language}.${format}`)
+    const originalLanguage = renderJob.value?.subtitleFilename?.match(/\.([a-z0-9-]+)\.srt$/i)?.[1] || 'en'
+    const filenameLanguage = language === 'en' ? originalLanguage : language
+    triggerDownload(file, `${stem}.${filenameLanguage}.${format}`)
     success.value = `${format.toUpperCase()} subtitle download started.`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Subtitle download failed'
@@ -347,7 +356,7 @@ async function createOtherPreset(preset: ClipPreset) {
             :disabled="!valid || saving || downloadingSubtitle || isDemoMode || store.video.transcriptCount <= 0"
             @click="downloadSubtitle('srt')"
           >
-            <Download :size="16" /> Export subtitle SRT
+            <Download :size="16" /> Original SRT
           </button>
           <button
             type="button"
@@ -355,12 +364,36 @@ async function createOtherPreset(preset: ClipPreset) {
             :disabled="!valid || saving || downloadingSubtitle || isDemoMode || store.video.transcriptCount <= 0"
             @click="downloadSubtitle('vtt')"
           >
-            <Download :size="16" /> Export subtitle VTT
+            <Download :size="16" /> Original VTT
           </button>
         </div>
+        <div v-if="renderCompleted" class="subtitle-export-actions">
+          <button
+            type="button"
+            class="button button-orange"
+            :disabled="downloadingSubtitle || !renderJob?.subtitleLanguages?.includes('th')"
+            @click="downloadSubtitle('srt', 'th')"
+          >
+            <Download :size="16" /> Thai SRT (MADLAD)
+          </button>
+          <button
+            type="button"
+            class="button button-orange"
+            :disabled="downloadingSubtitle || !renderJob?.subtitleLanguages?.includes('th-en')"
+            @click="downloadSubtitle('srt', 'th-en')"
+          >
+            <Download :size="16" /> Thai + English synced SRT
+          </button>
+        </div>
+        <p v-if="renderCompleted && renderJob?.subtitleLanguages?.includes('th-en')" class="subtitle-export-hint">
+          Translation ready — each cue has Thai on top and English below, synced to the exact rendered clip.
+        </p>
+        <p v-else-if="renderCompleted && renderJob?.subtitleLanguages?.includes('en')" class="subtitle-export-hint">
+          English subtitles are ready. Thai translation is unavailable or MADLAD is offline; check the backend logs.
+        </p>
         <p class="subtitle-export-hint">
           {{ renderCompleted
-            ? 'Exports subtitles matching this completed render job, even if the draft was edited later.'
+            ? 'All available subtitle files use this render job’s saved time range, even if the draft was edited later.'
             : 'Exports current draft subtitles rebased to 00:00:00. Requires transcript data; no automatic translation.' }}
         </p>
 
