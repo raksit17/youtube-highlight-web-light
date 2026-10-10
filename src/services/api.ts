@@ -16,13 +16,29 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   return response.json() as Promise<T>
 }
 
-async function requestBlob(path: string): Promise<Blob> {
+export interface DownloadedFile {
+  blob: Blob
+  filename: string | null
+}
+
+// Content-Disposition may contain UTF-8 filename*= (preferred) or ASCII filename=.
+export function filenameFromDisposition(header: string | null): string | null {
+  if (!header) return null
+  const encoded = /filename\*\s*=\s*(?:UTF-8'')([^;]+)/i.exec(header)
+  if (encoded) {
+    try { return decodeURIComponent(encoded[1].trim().replace(/^"|"$/g, '')) }
+    catch { /* Fall back to plain filename */ }
+  }
+  return /filename\s*=\s*"?([^";]+)"?/i.exec(header)?.[1]?.trim() ?? null
+}
+
+async function requestBlob(path: string): Promise<DownloadedFile> {
   const response = await fetch(`${base}${path}`)
   if (!response.ok) {
     const details = await response.text().catch(() => '')
     throw new Error(`API ${response.status}: ${details || response.statusText}`)
   }
-  return response.blob()
+  return { blob: await response.blob(), filename: filenameFromDisposition(response.headers.get('Content-Disposition')) }
 }
 
 const enc = (id: string) => encodeURIComponent(id)
@@ -107,12 +123,19 @@ export const highlightApi = {
     if (isDemoMode) throw new Error('Render jobs are only available when VITE_DEMO_MODE=false')
     return request<RenderJob>(`/render-jobs/${enc(id)}`)
   },
-  async downloadSubtitle(id: string, format: 'srt' | 'vtt'): Promise<Blob> {
+  async downloadSubtitle(id: string, format: 'srt' | 'vtt', renderJobId?: string): Promise<DownloadedFile> {
     if (isDemoMode) throw new Error('Subtitle downloads require VITE_DEMO_MODE=false')
-    return requestBlob(`/clips/${enc(id)}/subtitles?format=${format}`)
+    const path = renderJobId
+      ? `/render-jobs/${enc(renderJobId)}/subtitles?format=${format}`
+      : `/clips/${enc(id)}/subtitles?format=${format}`
+    return requestBlob(path)
   },
-  async downloadRenderedClip(id: string): Promise<Blob> {
+  async downloadRenderedClip(jobId: string): Promise<DownloadedFile> {
     if (isDemoMode) throw new Error('Rendered downloads are only available when VITE_DEMO_MODE=false')
-    return requestBlob(`/clips/${enc(id)}/download`)
+    return requestBlob(`/render-jobs/${enc(jobId)}/download`)
+  },
+  async exportRenderJob(jobId: string): Promise<{ filenameStem: string; [key: string]: unknown }> {
+    if (isDemoMode) throw new Error('Render exports require VITE_DEMO_MODE=false')
+    return request<{ filenameStem: string; [key: string]: unknown }>(`/render-jobs/${enc(jobId)}/export`)
   },
 }

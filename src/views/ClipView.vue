@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Download, CheckCircle2, Save, Scissors, SkipBack, SkipForward, Play, RotateCcw, Film, LoaderCircle, RefreshCw } from 'lucide-vue-next'
 import { useReviewStore } from '@/stores/review'
 import { highlightApi, isDemoMode } from '@/services/api'
+import type { DownloadedFile } from '@/services/api'
 import type { ClipDraft, ClipPreset, RenderFormat, RenderJob, RenderMode, RenderResolution } from '@/types/domain'
 import { CLIP_PRESET_CONFIG, PRESET_ORDER } from '@/utils/presets'
 import { formatTime, parseTime } from '@/utils/time'
@@ -144,25 +145,25 @@ async function renderVideo() {
   }
 }
 
-async function downloadRenderedVideo() {
-  if (!draft.value || !renderCompleted.value || downloading.value) return
+function triggerDownload(file: DownloadedFile, fallback: string) {
+  const url = URL.createObjectURL(file.blob)
+  const link = document.createElement('a')
+  link.href = url
+  link.download = file.filename || fallback
+  document.body.appendChild(link)
+  link.click()
+  link.remove()
+  window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+}
 
+async function downloadRenderedVideo() {
+  if (!renderCompleted.value || !renderJob.value || downloading.value) return
   downloading.value = true
   renderError.value = ''
-
   try {
-    const blob = await highlightApi.downloadRenderedClip(draft.value.id)
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    const extension = renderJob.value?.format === 'WEBM' ? 'webm' : 'mp4'
-
-    link.href = url
-    link.download = renderJob.value?.outputFilename || `highlight-${draft.value.id}.${extension}`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    URL.revokeObjectURL(url)
-
+    const { id, outputFilename, format } = renderJob.value
+    const file = await highlightApi.downloadRenderedClip(id)
+    triggerDownload(file, outputFilename || `rendered-video.${format === 'WEBM' ? 'webm' : 'mp4'}`)
     success.value = 'Rendered video download started.'
   } catch (e) {
     renderError.value = e instanceof Error ? e.message : 'Download failed'
@@ -171,35 +172,26 @@ async function downloadRenderedVideo() {
   }
 }
 
-
 async function downloadSubtitle(format: 'srt' | 'vtt') {
   if (!draft.value || !valid.value || downloadingSubtitle.value) return
-
   if (isDemoMode) {
     error.value = 'Subtitle download requires the NestJS backend.'
     return
   }
-
-  // The server calculates subtitle offsets from the saved Draft range.
-  if (isDirty.value) {
-    const saved = await saveDraft()
-    if (!saved) return
+  // Prefer a completed render's immutable subtitle snapshot, not an edited draft.
+  const renderJobId = renderCompleted.value ? renderJob.value?.id : undefined
+  if (!renderJobId && isDirty.value) {
+    if (!(await saveDraft())) return
   }
 
   downloadingSubtitle.value = true
   error.value = ''
   success.value = ''
-
   try {
-    const blob = await highlightApi.downloadSubtitle(draft.value.id, format)
-    const url = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `clip-${draft.value.id}.${format}`
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    const file = await highlightApi.downloadSubtitle(draft.value.id, format, renderJobId)
+    const stem = renderJob.value?.filenameStem || 'highlight'
+    const language = renderJob.value?.subtitleFilename?.match(/\.([a-z0-9-]+)\.srt$/i)?.[1] || 'en'
+    triggerDownload(file, `${stem}.${language}.${format}`)
     success.value = `${format.toUpperCase()} subtitle download started.`
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Subtitle download failed'
@@ -284,21 +276,29 @@ async function saveDraft(status?: 'DRAFT' | 'READY') {
 
 async function exportJson() {
   if (!valid.value || !draft.value) return
-  // Export only persisted values: save edits before requesting the backend's canonical export.
-  if (isDirty.value) { if (!(await saveDraft())) return }
-  if (!draft.value) return
+  // Once rendered, JSON must describe the same immutable range as the video.
+  const jobId = renderCompleted.value ? renderJob.value?.id : undefined
+  if (!jobId && isDirty.value) {
+    if (!(await saveDraft())) return
+  }
   try {
-    const result = await highlightApi.exportClip(draft.value.id)
+    const result = jobId
+      ? await highlightApi.exportRenderJob(jobId)
+      : await highlightApi.exportClip(draft.value.id)
+    const filenameStem = (result as { filenameStem?: string }).filenameStem
+      || renderJob.value?.filenameStem || `highlight-${draft.value.id}`
     const url = URL.createObjectURL(new Blob([JSON.stringify(result, null, 2)], { type: 'application/json' }))
     const link = document.createElement('a')
     link.href = url
-    link.download = `highlight-${draft.value.id}.json`
+    link.download = `${filenameStem}.json`
     document.body.appendChild(link)
     link.click()
     link.remove()
-    URL.revokeObjectURL(url)
-    success.value = 'Timestamp JSON exported.'
-  } catch (e) { error.value = e instanceof Error ? e.message : 'Export failed' }
+    window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
+    success.value = 'Matching timestamp JSON exported.'
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Export failed'
+  }
 }
 
 async function createOtherPreset(preset: ClipPreset) {
@@ -335,6 +335,11 @@ async function createOtherPreset(preset: ClipPreset) {
         <button class="button button-dark full-width" :disabled="!valid || saving" @click="saveDraft('READY')"><CheckCircle2 :size="17" /> Mark as READY</button>
         <button class="button button-outline full-width" :disabled="!valid || saving" @click="exportJson"><Download :size="17" /> Export timestamps JSON</button>
 
+        <div v-if="renderJob?.filenameStem" class="filename-preview">
+          <strong>OUTPUT FILE NAME</strong>
+          <span>{{ renderJob.filenameStem }}</span>
+          <small>MP4, SRT, VTT and JSON share this filename stem. Job files stay matched after later draft edits.</small>
+        </div>
         <div class="subtitle-export-actions">
           <button
             type="button"
@@ -354,7 +359,9 @@ async function createOtherPreset(preset: ClipPreset) {
           </button>
         </div>
         <p class="subtitle-export-hint">
-          Downloads an editable subtitle file rebased to 00:00:00 of the saved clip. Requires transcript data; does not translate automatically.
+          {{ renderCompleted
+            ? 'Exports subtitles matching this completed render job, even if the draft was edited later.'
+            : 'Exports current draft subtitles rebased to 00:00:00. Requires transcript data; no automatic translation.' }}
         </p>
 
 

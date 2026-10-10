@@ -27,6 +27,10 @@ export interface RenderJob {
   mode: RenderMode
   includeSubtitles: boolean
   outputFilename: string | null
+  filenameStem: string | null
+  subtitleFilename: string | null
+  clipStartMs: number | null
+  clipEndMs: number | null
   downloadUrl: string | null
   errorMessage: string | null
   startedAt: string | null
