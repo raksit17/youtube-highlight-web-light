@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ArrowLeft, Copy, RefreshCw, Save, Sparkles } from 'lucide-vue-next'
 import { highlightApi, isDemoMode } from '@/services/api'
@@ -23,6 +23,7 @@ const saving = ref(false)
 const error = ref('')
 const notice = ref('')
 const modelsError = ref('')
+const descriptionBytes = computed(() => new TextEncoder().encode(description.value).length)
 
 function showDraft(value: YoutubeMetadataDraft) {
   metadata.value = value
@@ -197,7 +198,7 @@ onMounted(() => { void load() })
             <label class="field-label">Description
               <textarea v-model="description" class="text-input metadata-description" rows="11"></textarea>
             </label>
-            <p class="metadata-help">UTF-8: {{ new TextEncoder().encode(description).length }}/5000 bytes</p>
+            <p class="metadata-help">UTF-8: {{ descriptionBytes }}/5000 bytes</p>
             <button class="button button-outline" type="button" @click="copy(description, 'Description')"><Copy :size="15" /> Copy description</button>
 
             <label class="field-label">Hashtags
