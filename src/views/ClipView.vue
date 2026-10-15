@@ -70,6 +70,19 @@ const renderRequestPreview = computed(() => ({
     : null,
 }))
 
+async function openYoutubeMetadata() {
+  if (!draft.value || !valid.value || saving.value) return
+  if (isDemoMode) {
+    error.value = 'Set VITE_DEMO_MODE=false to use AI metadata generation.'
+    return
+  }
+  if (isDirty.value) {
+    const saved = await saveDraft()
+    if (!saved) return
+  }
+  await router.push({ name: 'youtube-metadata', params: { id: draft.value.id } })
+}
+
 function stopRenderPolling() {
   if (renderPollTimer !== undefined) {
     window.clearTimeout(renderPollTimer)
@@ -343,6 +356,7 @@ async function createOtherPreset(preset: ClipPreset) {
         <button class="button button-orange full-width" :disabled="!valid || saving" @click="saveDraft()"><Save :size="17" /> {{ saving ? 'Saving...' : 'Save custom draft' }}</button>
         <button class="button button-dark full-width" :disabled="!valid || saving" @click="saveDraft('READY')"><CheckCircle2 :size="17" /> Mark as READY</button>
         <button class="button button-outline full-width" :disabled="!valid || saving" @click="exportJson"><Download :size="17" /> Export timestamps JSON</button>
+        <button class="button button-orange full-width" :disabled="!valid || saving || isDemoMode" @click="openYoutubeMetadata"><Film :size="17" /> AI YouTube Title & Description</button>
 
         <div v-if="renderJob?.filenameStem" class="filename-preview">
           <strong>OUTPUT FILE NAME</strong>

@@ -3,6 +3,7 @@ import StreamsView from '@/views/StreamsView.vue'
 import ReviewView from '@/views/ReviewView.vue'
 import ClipView from '@/views/ClipView.vue'
 import AnalyticsView from '@/views/AnalyticsView.vue'
+import YoutubeMetadataView from '@/views/YoutubeMetadataView.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -11,6 +12,7 @@ export const router = createRouter({
     { path: '/videos/:id', name: 'review', component: ReviewView },
     { path: '/videos/:id/clip/:candidateId', name: 'clip', component: ClipView },
     { path: '/analytics', name: 'analytics', component: AnalyticsView },
+    { path: '/clips/:id/youtube-metadata', name: 'youtube-metadata', component: YoutubeMetadataView },
     { path: '/:pathMatch(.*)*', redirect: '/' },
   ],
   scrollBehavior() { return { top: 0 } },

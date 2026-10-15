@@ -1,3 +1,4 @@
+import type { YoutubeMetadataDraft, OllamaModels, MetadataGenerationInput, MetadataEditInput } from '@/types/youtube-metadata'
 import type { Candidate, CandidateContext, ClipDraft, CreateClipPayload, UpdateClipPayload, Heatmap, RejectReason, ReviewStatus, RenderJob, RenderOptions, Video } from '@/types/domain'
 import { demoCandidates, demoContext, demoCreateClip, demoGetClip, demoExportClip, demoHeatmap, demoListClips, demoUpdateClip, demoUpdateReview, demoVideos } from './demo'
 
@@ -111,6 +112,26 @@ export const highlightApi = {
   async exportClip(id: string): Promise<unknown> {
     if (isDemoMode) return demoExportClip(id)
     return request<unknown>(`/clips/${enc(id)}/export`)
+  },
+  async listOllamaModels(): Promise<OllamaModels> {
+    if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
+    return request<OllamaModels>('/ai/ollama/models')
+  },
+  async getYoutubeMetadata(id: string): Promise<YoutubeMetadataDraft | null> {
+    if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
+    return request<YoutubeMetadataDraft | null>(/`/clips/${enc(id)}/youtube-metadata`)
+  },
+  async generateYoutubeMetadata(id: string, payload: MetadataGenerationInput): Promise<YoutubeMetadataDraft> {
+    if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
+    return request<YoutubeMetadataDraft>(/`/clips/${enc(id)}/youtube-metadata/generate`, {
+      method: 'POST', body: JSON.stringify(payload),
+    })
+  },
+  async updateYoutubeMetadata(id: string, payload: MetadataEditInput): Promise<YoutubeMetadataDraft> {
+    if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
+    return request<YoutubeMetadataDraft>(/`/clips/${enc(id)}/youtube-metadata`, {
+      method: 'PATCH', body: JSON.stringify(payload),
+    })
   },
   async renderClip(id: string, options: RenderOptions): Promise<RenderJob> {
     if (isDemoMode) throw new Error('Video rendering is only available when VITE_DEMO_MODE=false')
