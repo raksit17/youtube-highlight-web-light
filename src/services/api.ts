@@ -119,17 +119,17 @@ export const highlightApi = {
   },
   async getYoutubeMetadata(id: string): Promise<YoutubeMetadataDraft | null> {
     if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
-    return request<YoutubeMetadataDraft | null>(/`/clips/${enc(id)}/youtube-metadata`)
+    return request<YoutubeMetadataDraft | null>(`/clips/${enc(id)}/youtube-metadata`)
   },
   async generateYoutubeMetadata(id: string, payload: MetadataGenerationInput): Promise<YoutubeMetadataDraft> {
     if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
-    return request<YoutubeMetadataDraft>(/`/clips/${enc(id)}/youtube-metadata/generate`, {
+    return request<YoutubeMetadataDraft>(`/clips/${enc(id)}/youtube-metadata/generate`, {
       method: 'POST', body: JSON.stringify(payload),
     })
   },
   async updateYoutubeMetadata(id: string, payload: MetadataEditInput): Promise<YoutubeMetadataDraft> {
     if (isDemoMode) throw new Error('AI metadata requires VITE_DEMO_MODE=false')
-    return request<YoutubeMetadataDraft>(/`/clips/${enc(id)}/youtube-metadata`, {
+    return request<YoutubeMetadataDraft>(`/clips/${enc(id)}/youtube-metadata`, {
       method: 'PATCH', body: JSON.stringify(payload),
     })
   },
