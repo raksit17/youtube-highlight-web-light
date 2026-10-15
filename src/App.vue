@@ -28,7 +28,7 @@ import { isDemoMode } from '@/services/api'
     </aside>
     <div class="app-main">
       <header class="topbar">
-        <div class="breadcrumb">WORKSPACE <span>/</span> <strong>{{ $route.name === 'streams' ? 'Streams' : $route.name === 'clip' ? 'Clip editor' : $route.name === 'analytics' ? 'Analytics' : 'Review highlights' }}</strong></div>
+        <div class="breadcrumb">WORKSPACE <span>/</span> <strong>{{ $route.name === 'streams' ? 'Streams' : $route.name === 'clip' ? 'Clip editor' : $route.name === 'analytics' ? 'Analytics' : $route.name === 'youtube-metadata' ? 'AI YouTube metadata' : 'Review highlights' }}</strong></div>
         <div class="topbar-right">
           <span v-if="isDemoMode" class="demo-pill"><span class="pulse-dot"></span> DEMO DATA</span>
           <span class="user-avatar">HF</span>
